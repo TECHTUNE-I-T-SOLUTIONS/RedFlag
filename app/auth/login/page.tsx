@@ -43,17 +43,19 @@ export default function LoginPage() {
         console.log('✅ Login successful for user:', data.session.user.email)
         toast.success('Logged in successfully!')
         
-        // Give Supabase proxy time to set cookies and client to read them
-        setTimeout(() => {
-          console.log('Redirecting to dashboard...')
-          // Refresh Supabase client to ensure it reads the new session from cookies
-          supabase.auth.refreshSession().then(() => {
+        // Give Supabase proxy extended time to set cookies and persist session
+        setTimeout(async () => {
+          try {
+            // Wait for session to be properly stored
+            await new Promise(r => setTimeout(r, 500))
+            
+            console.log('Redirecting to dashboard...')
             router.push('/dashboard')
-          }).catch(() => {
-            // If refresh fails, still redirect - the session should be in cookies
+          } catch (error) {
+            console.error('Error during redirect:', error)
             router.push('/dashboard')
-          })
-        }, 1000)
+          }
+        }, 1500)
       } else {
         toast.error('Login failed: No session returned')
         setIsLoading(false)

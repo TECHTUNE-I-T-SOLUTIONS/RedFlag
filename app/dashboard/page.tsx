@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -18,6 +19,7 @@ interface Analysis {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [stats, setStats] = useState({
     totalAnalyses: 0,
     highRiskCount: 0,
@@ -25,31 +27,24 @@ export default function DashboardPage() {
   })
   const [recentAnalyses, setRecentAnalyses] = useState<Analysis[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsLoading(true)
         
-        // Get the user to verify authentication (getUser reads from cookie-based session)
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
-        
-        if (userError || !user) {
-          // Not authenticated, user will need to login
-          return
-        }
-        
-        // Get the session to get auth token
+        // Get the authenticated session (AuthGuard ensures we have one)
         const { data: { session } } = await supabase.auth.getSession()
         
         if (!session?.access_token) {
-          // Try refreshing the session
-          const { data: { session: newSession } } = await supabase.auth.refreshSession()
-          if (!newSession?.access_token) {
-            throw new Error('No auth token available')
-          }
-          // Use the refreshed session below
+          console.error('No valid session found')
+          setIsLoading(false)
+          return
         }
+
+        setIsAuthenticated(true)
+        console.log('Dashboard authenticated')
 
         // Fetch stats
         const statsResponse = await fetch('/api/stats', {

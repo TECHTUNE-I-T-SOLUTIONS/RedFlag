@@ -31,6 +31,11 @@ export default function SignupPage() {
       return
     }
 
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+
     if (!agreed) {
       toast.error('Please accept the terms and conditions')
       return
@@ -42,18 +47,24 @@ export default function SignupPage() {
       const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+        },
       })
 
       if (error) {
         toast.error(error.message || 'Failed to create account')
+        setIsLoading(false)
         return
       }
 
       toast.success('Account created! Check your email to confirm.')
       router.push('/auth/login')
+      
+      // Keep isLoading true to prevent resubmission during redirect
     } catch (error) {
+      console.error('Signup error:', error)
       toast.error('An error occurred. Please try again.')
-    } finally {
       setIsLoading(false)
     }
   }

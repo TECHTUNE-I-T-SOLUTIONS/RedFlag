@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ArrowRight, BarChart3, AlertTriangle, TrendingUp, Loader2, Zap, Clock, Settings } from 'lucide-react'
+import { ArrowRight, BarChart3, AlertTriangle, TrendingUp, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { getSessionFromStorage } from '@/lib/session-storage'
 import { toast } from 'sonner'
 
 interface Analysis {
@@ -32,62 +31,47 @@ export default function DashboardPage() {
       try {
         setIsLoading(true)
         
-        // Get session - try localStorage first, then Supabase
-        let session = getSessionFromStorage()
+        // Middleware ensures session exists, just get it from Supabase
+        const { data: { session } } = await supabase.auth.getSession()
         
-        if (!session) {
-          const { data: { session: supabaseSession } } = await supabase.auth.getSession()
-          session = supabaseSession
-        }
-        
-        // If no session, just show empty dashboard
         if (!session?.access_token) {
-          console.log('No session token available - dashboard will show empty state')
+          console.warn('Session token not found')
           setIsLoading(false)
           return
         }
 
-        console.log('Dashboard: Session found, loading data...')
+        console.log('Loading dashboard data...')
 
         // Fetch stats
-        try {
-          const statsResponse = await fetch('/api/stats', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-          })
-          
-          if (statsResponse.ok) {
-            const statsData = await statsResponse.json()
-            setStats(statsData)
-          } else if (statsResponse.status === 401) {
-            console.warn('Unauthorized - invalid token')
-          }
-        } catch (statsError) {
-          console.error('Error fetching stats:', statsError)
+        const statsResponse = await fetch('/api/stats', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+        
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json()
+          setStats(statsData)
         }
 
         // Fetch recent analyses
-        try {
-          const analysesResponse = await fetch('/api/analyses?limit=5', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-          })
-          
-          if (analysesResponse.ok) {
-            const analysesData = await analysesResponse.json()
-            setRecentAnalyses(analysesData.analyses || [])
-          }
-        } catch (analysesError) {
-          console.error('Error fetching analyses:', analysesError)
+        const analysesResponse = await fetch('/api/analyses?limit=5', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+        
+        if (analysesResponse.ok) {
+          const analysesData = await analysesResponse.json()
+          setRecentAnalyses(analysesData.analyses || [])
         }
       } catch (error) {
-        console.error('Dashboard error:', error)
+        console.error('Error loading dashboard:', error)
+        toast.error('Failed to load dashboard')
       } finally {
         setIsLoading(false)
       }

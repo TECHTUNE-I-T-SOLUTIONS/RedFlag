@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getSessionFromStorage, clearSession } from '@/lib/session-storage'
+import { clearSession } from '@/lib/session-storage'
 import { DashboardHeader } from '@/components/DashboardHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { LogoutConfirmModal } from '@/components/LogoutConfirmModal'
@@ -30,19 +30,11 @@ export default function DashboardLayout({
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   useEffect(() => {
-    // Get user email - check Supabase first, then localStorage
+    // Get user email - middleware ensures session exists
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      
       if (user?.email) {
         setUserEmail(user.email)
-        return
-      }
-      
-      // Fallback to localStorage if Supabase user not found
-      const session = getSessionFromStorage()
-      if (session?.user?.email) {
-        setUserEmail(session.user.email)
       }
     }
     getUser()

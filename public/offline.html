@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline - RedFlag</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #333;
+      }
+
+      .container {
+        background: white;
+        border-radius: 12px;
+        padding: 48px 32px;
+        max-width: 500px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+      }
+
+      .icon {
+        font-size: 64px;
+        margin-bottom: 24px;
+        animation: bounce 2s infinite;
+      }
+
+      @keyframes bounce {
+        0%, 100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+
+      h1 {
+        font-size: 28px;
+        margin-bottom: 16px;
+        color: #333;
+      }
+
+      p {
+        color: #666;
+        margin-bottom: 24px;
+        line-height: 1.6;
+      }
+
+      .status {
+        background: #f5f5f5;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 24px 0;
+        font-size: 14px;
+        color: #666;
+      }
+
+      .status-icon {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ff6b6b;
+        margin-right: 8px;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .status.online .status-icon {
+        background: #51cf66;
+        animation: none;
+      }
+
+      .buttons {
+        display: flex;
+        gap: 12px;
+        margin-top: 32px;
+      }
+
+      button {
+        flex: 1;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+      }
+
+      .btn-secondary {
+        background: #f5f5f5;
+        color: #333;
+      }
+
+      .btn-secondary:hover {
+        background: #e8e8e8;
+      }
+
+      .suggestions {
+        margin-top: 32px;
+        text-align: left;
+        background: #f9f9f9;
+        border-radius: 8px;
+        padding: 24px;
+      }
+
+      .suggestions h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #333;
+      }
+
+      .suggestions ul {
+        list-style: none;
+        font-size: 13px;
+        color: #666;
+      }
+
+      .suggestions li {
+        padding: 8px 0;
+        padding-left: 24px;
+        position: relative;
+      }
+
+      .suggestions li:before {
+        content: '✓';
+        position: absolute;
+        left: 0;
+        color: #667eea;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">📡</div>
+      <h1>You're Offline</h1>
+      <p>It looks like you've lost your internet connection. Don't worry, some features may still work with cached data.</p>
+
+      <div class="status" id="status">
+        <span class="status-icon"></span>
+        <span>Waiting for connection...</span>
+      </div>
+
+      <div class="buttons">
+        <button class="btn-primary" onclick="location.reload()">Retry</button>
+        <button class="btn-secondary" onclick="goHome()">Go Home</button>
+      </div>
+
+      <div class="suggestions">
+        <h3>What you can try:</h3>
+        <ul>
+          <li>Check your internet connection</li>
+          <li>Disable airplane mode if enabled</li>
+          <li>Move closer to your router</li>
+          <li>Try again in a few moments</li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById('status')
+      const statusIcon = statusEl.querySelector('.status-icon')
+      const statusText = statusEl.querySelector('span:last-child')
+
+      function updateStatus() {
+        if (navigator.onLine) {
+          statusIcon.style.background = '#51cf66'
+          statusText.textContent = 'Connection restored! Reloading...'
+          statusEl.classList.add('online')
+          setTimeout(() => location.reload(), 1500)
+        } else {
+          statusIcon.style.background = '#ff6b6b'
+          statusText.textContent = 'Offline - Waiting for connection...'
+          statusEl.classList.remove('online')
+        }
+      }
+
+      function goHome() {
+        window.location.href = '/'
+      }
+
+      updateStatus()
+      window.addEventListener('online', updateStatus)
+      window.addEventListener('offline', updateStatus)
+
+      // Check connection every 2 seconds
+      setInterval(() => {
+        if (navigator.onLine) {
+          updateStatus()
+        }
+      }, 2000)
+    </script>
+  </body>
+</html>

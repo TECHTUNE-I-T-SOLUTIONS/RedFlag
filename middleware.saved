@@ -1,0 +1,53 @@
+import { type NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // Public routes that don't need auth
+  const publicRoutes = [
+    '/',
+    '/auth/login',
+    '/auth/signup',
+    '/auth/reset-password',
+    '/features',
+    '/how-it-works',
+    '/pricing',
+    '/about',
+    '/contact',
+  ]
+
+  // Check if route is public
+  if (publicRoutes.includes(pathname)) {
+    return NextResponse.next()
+  }
+
+  // Get the session cookie
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  const authToken = request.cookies.get('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('.')[0] + '-auth-token')?.value
+
+  // If trying to access dashboard without auth, redirect to login
+  if (pathname.startsWith('/dashboard') && !authToken) {
+    return NextResponse.redirect(new URL('/auth/login', request.url))
+  }
+
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+  ],
+}

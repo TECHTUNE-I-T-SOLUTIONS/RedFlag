@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ArrowRight, BarChart3, AlertTriangle, TrendingUp, Loader2, Zap, Clock, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { getSessionFromStorage } from '@/lib/session-storage'
 import { toast } from 'sonner'
 
 interface Analysis {
@@ -31,36 +32,24 @@ export default function DashboardPage() {
       try {
         setIsLoading(true)
         
-        // Try to get session from localStorage first (more reliable on Vercel)
-        let session = null
-        if (typeof window !== 'undefined') {
-          const localSession = localStorage.getItem('supabase-auth-token')
-          if (localSession) {
-            try {
-              const parsed = JSON.parse(localSession)
-              session = parsed
-            } catch (e) {
-              console.warn('Could not parse localStorage session')
-            }
-          }
-        }
+        // Get session - try localStorage first, then Supabase
+        let session = getSessionFromStorage()
         
-        // If no localStorage session, try Supabase
         if (!session) {
           const { data: { session: supabaseSession } } = await supabase.auth.getSession()
           session = supabaseSession
         }
         
-        // If still no session, just show empty state
+        // If no session, just show empty dashboard
         if (!session?.access_token) {
-          console.log('No session found - showing empty dashboard')
+          console.log('No session token available - dashboard will show empty state')
           setIsLoading(false)
           return
         }
 
-        console.log('Dashboard session found, fetching data...')
+        console.log('Dashboard: Session found, loading data...')
 
-        // Fetch stats with the access token
+        // Fetch stats
         try {
           const statsResponse = await fetch('/api/stats', {
             method: 'GET',
@@ -74,7 +63,7 @@ export default function DashboardPage() {
             const statsData = await statsResponse.json()
             setStats(statsData)
           } else if (statsResponse.status === 401) {
-            console.warn('Unauthorized - invalid or expired token')
+            console.warn('Unauthorized - invalid token')
           }
         } catch (statsError) {
           console.error('Error fetching stats:', statsError)

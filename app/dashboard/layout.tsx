@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { getSessionFromStorage, clearSession } from '@/lib/session-storage'
 import { DashboardHeader } from '@/components/DashboardHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { LogoutConfirmModal } from '@/components/LogoutConfirmModal'
@@ -20,6 +21,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  const router = useRouter()
   const [userEmail, setUserEmail] = useState<string>('')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -38,18 +40,9 @@ export default function DashboardLayout({
       }
       
       // Fallback to localStorage if Supabase user not found
-      if (typeof window !== 'undefined') {
-        const localSession = localStorage.getItem('supabase-auth-token')
-        if (localSession) {
-          try {
-            const parsed = JSON.parse(localSession)
-            if (parsed.user?.email) {
-              setUserEmail(parsed.user.email)
-            }
-          } catch (e) {
-            console.error('Failed to parse localStorage session:', e)
-          }
-        }
+      const session = getSessionFromStorage()
+      if (session?.user?.email) {
+        setUserEmail(session.user.email)
       }
     }
     getUser()
@@ -132,6 +125,7 @@ export default function DashboardLayout({
     setIsLoggingOut(true)
     try {
       await supabase.auth.signOut()
+      clearSession() // Clear localStorage session
       toast.success('Logged out successfully')
       router.push('/')
     } catch (error) {

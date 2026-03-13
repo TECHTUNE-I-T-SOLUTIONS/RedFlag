@@ -31,11 +31,24 @@ export default function DashboardPage() {
       try {
         setIsLoading(true)
         
+        // Get the user to verify authentication (getUser reads from cookie-based session)
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError || !user) {
+          // Not authenticated, user will need to login
+          return
+        }
+        
         // Get the session to get auth token
         const { data: { session } } = await supabase.auth.getSession()
         
         if (!session?.access_token) {
-          throw new Error('No auth token available')
+          // Try refreshing the session
+          const { data: { session: newSession } } = await supabase.auth.refreshSession()
+          if (!newSession?.access_token) {
+            throw new Error('No auth token available')
+          }
+          // Use the refreshed session below
         }
 
         // Fetch stats

@@ -48,7 +48,7 @@ export default function SignupPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 
@@ -60,8 +60,6 @@ export default function SignupPage() {
 
       toast.success('Account created! Check your email to confirm.')
       router.push('/auth/login')
-      
-      // Keep isLoading true to prevent resubmission during redirect
     } catch (error) {
       console.error('Signup error:', error)
       toast.error('An error occurred. Please try again.')

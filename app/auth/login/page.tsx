@@ -25,39 +25,35 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // First, clear any existing session
-      await supabase.auth.signOut()
+      console.log('Starting login for:', email)
 
-      // Sign in with email and password
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) {
+        console.error('Login error:', error.message)
         toast.error(error.message || 'Failed to login')
         setIsLoading(false)
         return
       }
 
-      if (!data?.session) {
-        toast.error('Session not established. Please try again.')
+      if (data?.session?.user) {
+        console.log('✅ Login successful for user:', data.session.user.email)
+        toast.success('Logged in successfully!')
+        
+        // Give Supabase a moment to set cookies via proxy
+        setTimeout(() => {
+          console.log('Redirecting to dashboard...')
+          router.push('/dashboard')
+        }, 500)
+      } else {
+        toast.error('Login failed: No session returned')
         setIsLoading(false)
-        return
       }
-
-      // Session is confirmed
-      toast.success('Logged in successfully!')
-
-      // Small delay to ensure cookies are fully set
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      // Redirect to dashboard
-      router.push('/dashboard')
-      
-      // Keep isLoading true to prevent form resubmission during redirect
     } catch (error) {
-      console.error('Login error:', error)
+      console.error('Login exception:', error)
       toast.error('An error occurred. Please try again.')
       setIsLoading(false)
     }

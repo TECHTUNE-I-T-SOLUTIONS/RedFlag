@@ -20,7 +20,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const router = useRouter()
   const [userEmail, setUserEmail] = useState<string>('')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)

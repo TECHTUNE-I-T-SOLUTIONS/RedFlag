@@ -31,69 +31,74 @@ export default function DashboardPage() {
       try {
         setIsLoading(true)
         
-        // Try to get session from Supabase first
-        let { data: { session } } = await supabase.auth.getSession()
-        
-        // If no session, check localStorage as fallback (handles Vercel proxy issues)
-        if (!session && typeof window !== 'undefined') {
+        // Try to get session from localStorage first (more reliable on Vercel)
+        let session = null
+        if (typeof window !== 'undefined') {
           const localSession = localStorage.getItem('supabase-auth-token')
           if (localSession) {
             try {
               const parsed = JSON.parse(localSession)
-              // Restore the session in Supabase
-              await supabase.auth.setSession({
-                access_token: parsed.access_token,
-                refresh_token: parsed.refresh_token,
-              })
-              // Get fresh session
-              const { data: { session: restoredSession } } = await supabase.auth.getSession()
-              session = restoredSession
+              session = parsed
             } catch (e) {
-              console.error('Failed to restore session from localStorage:', e)
+              console.warn('Could not parse localStorage session')
             }
           }
         }
         
+        // If no localStorage session, try Supabase
+        if (!session) {
+          const { data: { session: supabaseSession } } = await supabase.auth.getSession()
+          session = supabaseSession
+        }
+        
+        // If still no session, just show empty state
         if (!session?.access_token) {
-          console.warn('No valid session available')
+          console.log('No session found - showing empty dashboard')
           setIsLoading(false)
           return
         }
 
-        console.log('Dashboard has valid session')
+        console.log('Dashboard session found, fetching data...')
 
-        // Fetch stats
-        const statsResponse = await fetch('/api/stats', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        })
-        
-        if (!statsResponse.ok) {
-          throw new Error('Failed to fetch stats')
+        // Fetch stats with the access token
+        try {
+          const statsResponse = await fetch('/api/stats', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          
+          if (statsResponse.ok) {
+            const statsData = await statsResponse.json()
+            setStats(statsData)
+          } else if (statsResponse.status === 401) {
+            console.warn('Unauthorized - invalid or expired token')
+          }
+        } catch (statsError) {
+          console.error('Error fetching stats:', statsError)
         }
-        
-        const statsData = await statsResponse.json()
-        setStats(statsData)
 
         // Fetch recent analyses
-        const analysesResponse = await fetch('/api/analyses?limit=5', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        })
-        
-        if (analysesResponse.ok) {
-          const analysesData = await analysesResponse.json()
-          setRecentAnalyses(analysesData.analyses || [])
+        try {
+          const analysesResponse = await fetch('/api/analyses?limit=5', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          
+          if (analysesResponse.ok) {
+            const analysesData = await analysesResponse.json()
+            setRecentAnalyses(analysesData.analyses || [])
+          }
+        } catch (analysesError) {
+          console.error('Error fetching analyses:', analysesError)
         }
       } catch (error) {
-        console.error('Error loading dashboard:', error)
-        toast.error('Failed to load dashboard data')
+        console.error('Dashboard error:', error)
       } finally {
         setIsLoading(false)
       }

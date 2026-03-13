@@ -41,24 +41,30 @@ export default function LoginPage() {
 
       if (data?.session?.user) {
         console.log('✅ Login successful for user:', data.session.user.email)
-        console.log('Session token:', data.session.access_token)
         
-        // Explicitly save session to localStorage
+        // Create session object for localStorage
         const sessionData = {
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
           expires_at: data.session.expires_at,
           user: data.session.user,
         }
-        localStorage.setItem('supabase-auth-token', JSON.stringify(sessionData))
+        
+        // Save to localStorage before redirecting
+        try {
+          localStorage.setItem('supabase-auth-token', JSON.stringify(sessionData))
+          console.log('Session saved to localStorage')
+        } catch (e) {
+          console.error('Failed to save session to localStorage:', e)
+        }
         
         toast.success('Logged in successfully!')
         
-        // Wait a moment to ensure localStorage is synced
-        await new Promise(resolve => setTimeout(resolve, 300))
-        
-        console.log('Redirecting to dashboard...')
-        router.push('/dashboard')
+        // Small delay to ensure localStorage is written
+        setTimeout(() => {
+          console.log('Redirecting to dashboard...')
+          router.push('/dashboard')
+        }, 500)
       } else {
         toast.error('Login failed: No session returned')
         setIsLoading(false)

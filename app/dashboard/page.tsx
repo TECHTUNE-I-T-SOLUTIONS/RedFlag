@@ -31,14 +31,36 @@ export default function DashboardPage() {
       try {
         setIsLoading(true)
         
-        // Get the session
-        const { data: { session } } = await supabase.auth.getSession()
+        // Try to get session from Supabase first
+        let { data: { session } } = await supabase.auth.getSession()
+        
+        // If no session, check localStorage as fallback (handles Vercel proxy issues)
+        if (!session && typeof window !== 'undefined') {
+          const localSession = localStorage.getItem('supabase-auth-token')
+          if (localSession) {
+            try {
+              const parsed = JSON.parse(localSession)
+              // Restore the session in Supabase
+              await supabase.auth.setSession({
+                access_token: parsed.access_token,
+                refresh_token: parsed.refresh_token,
+              })
+              // Get fresh session
+              const { data: { session: restoredSession } } = await supabase.auth.getSession()
+              session = restoredSession
+            } catch (e) {
+              console.error('Failed to restore session from localStorage:', e)
+            }
+          }
+        }
         
         if (!session?.access_token) {
-          console.warn('No valid session, data cannot be loaded')
+          console.warn('No valid session available')
           setIsLoading(false)
           return
         }
+
+        console.log('Dashboard has valid session')
 
         // Fetch stats
         const statsResponse = await fetch('/api/stats', {

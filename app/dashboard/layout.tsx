@@ -29,11 +29,28 @@ export default function DashboardLayout({
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   useEffect(() => {
-    // Get user email
+    // Get user email - check Supabase first, then localStorage
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
+      
       if (user?.email) {
         setUserEmail(user.email)
+        return
+      }
+      
+      // Fallback to localStorage if Supabase user not found
+      if (typeof window !== 'undefined') {
+        const localSession = localStorage.getItem('supabase-auth-token')
+        if (localSession) {
+          try {
+            const parsed = JSON.parse(localSession)
+            if (parsed.user?.email) {
+              setUserEmail(parsed.user.email)
+            }
+          } catch (e) {
+            console.error('Failed to parse localStorage session:', e)
+          }
+        }
       }
     }
     getUser()

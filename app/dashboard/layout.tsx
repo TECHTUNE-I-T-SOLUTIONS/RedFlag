@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase'
 import { DashboardHeader } from '@/components/DashboardHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { LogoutConfirmModal } from '@/components/LogoutConfirmModal'
-import { AuthGuard } from '@/app/components/auth-guard'
 import { toast } from 'sonner'
 import {
   BarChart3,
@@ -128,36 +127,34 @@ export default function DashboardLayout({
   }
 
   return (
-    <AuthGuard>
-      <>
-        <DashboardHeader
-          userEmail={userEmail}
-          onLogout={() => setLogoutModalOpen(true)}
-          onMenuClick={() => setIsSidebarOpen(true)}
+    <>
+      <DashboardHeader
+        userEmail={userEmail}
+        onLogout={() => setLogoutModalOpen(true)}
+        onMenuClick={() => setIsSidebarOpen(true)}
+      />
+
+      <div className="flex h-[calc(100vh-72px)]">
+        <Sidebar 
+          items={navItems}
+          isOpen={isSidebarOpen}
+          onOpenChange={setIsSidebarOpen}
+          onCollapsedChange={setIsSidebarCollapsed}
         />
 
-        <div className="flex h-[calc(100vh-72px)]">
-          <Sidebar 
-            items={navItems}
-            isOpen={isSidebarOpen}
-            onOpenChange={setIsSidebarOpen}
-            onCollapsedChange={setIsSidebarCollapsed}
-          />
+        <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-60'}`}>
+          <div className="container mx-auto px-4 py-8">
+            {children}
+          </div>
+        </main>
+      </div>
 
-          <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-60'}`}>
-            <div className="container mx-auto px-4 py-8">
-              {children}
-            </div>
-          </main>
-        </div>
-
-        <LogoutConfirmModal
-          open={logoutModalOpen}
-          onOpenChange={setLogoutModalOpen}
-          onConfirm={handleLogout}
-          isLoading={isLoggingOut}
-        />
-      </>
-    </AuthGuard>
+      <LogoutConfirmModal
+        open={logoutModalOpen}
+        onOpenChange={setLogoutModalOpen}
+        onConfirm={handleLogout}
+        isLoading={isLoggingOut}
+      />
+    </>
   )
 }

@@ -9,11 +9,15 @@ export async function proxy(request: NextRequest) {
     '/auth/login',
     '/auth/signup',
     '/auth/reset-password',
+    '/auth/callback',
     '/features',
     '/how-it-works',
     '/pricing',
     '/about',
     '/contact',
+    '/blog',
+    '/privacy',
+    '/terms',
   ]
 
   // Check if route is public
@@ -21,19 +25,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for Supabase auth token in cookies
-  // Supabase stores auth data in cookies with pattern: sb-<project-ref>-auth-token
+  // Check for NextAuth session cookie
+  // NextAuth stores session in: next-auth.session-token (dev) or __Secure-next-auth.session-token (prod)
   const cookies = request.cookies
-  
-  // Look for any cookie that contains 'auth-token'
-  const hasAuthToken = Array.from(cookies).some(([name]) => 
-    name.includes('auth-token') || name.includes('auth')
-  )
+  const hasSession = 
+    cookies.has('next-auth.session-token') || 
+    cookies.has('__Secure-next-auth.session-token')
 
-  // If trying to access protected routes without auth, redirect to login
+  // If trying to access protected routes without session, redirect to login
   if (pathname.startsWith('/dashboard')) {
-    if (!hasAuthToken) {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+    if (!hasSession) {
+      const loginUrl = new URL('/auth/login', request.url)
+      loginUrl.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(loginUrl)
     }
   }
 

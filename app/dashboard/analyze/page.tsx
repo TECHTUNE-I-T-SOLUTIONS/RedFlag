@@ -1,18 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { RiskScoreDisplay } from '@/components/RiskScoreDisplay'
-import { supabase } from '@/lib/supabase'
 import { downloadPDF } from '@/lib/pdf-generator'
 import { toast } from 'sonner'
 import { FileText, FileImage, Link as LinkIcon, Loader2, AlertTriangle, CheckCircle2, Search, Download } from 'lucide-react'
+import { useEffect } from 'react'
 
 export default function AnalyzePage() {
+  const router = useRouter()
+  const { data: session, status } = useSession()
   const [activeTab, setActiveTab] = useState('text')
   const [isLoading, setIsLoading] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
@@ -22,6 +26,41 @@ export default function AnalyzePage() {
   const [textInput, setTextInput] = useState('')
   const [urlInput, setUrlInput] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?callbackUrl=/dashboard/analyze')
+    }
+  }, [status, router])
+
+  const handleImageSelect = (file: File | null) => {
+    if (file && file.type.startsWith('image/')) {
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    } else if (file) {
+      toast.error('Please select a valid image file')
+    }
+  }
+
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const files = e.dataTransfer.files
+    if (files && files[0]) {
+      handleImageSelect(files[0])
+    }
+  }
+
+  const handleImageClick = () => {
+    const input = document.getElementById('image-input') as HTMLInputElement
+    input?.click()
+  }
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,23 +109,20 @@ export default function AnalyzePage() {
 
   const sendAnalysisRequest = async (body: any) => {
     try {
-      // Get the session to get auth token
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.access_token) {
-        throw new Error('No auth token available')
-      }
-
+      // NextAuth handles session via cookies automatically
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(body),
       })
 
       if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/auth/login?callbackUrl=/dashboard/analyze')
+          return
+        }
         const error = await response.json()
         throw new Error(error.error || 'Analysis failed')
       }
@@ -203,20 +239,54 @@ export default function AnalyzePage() {
               <TabsContent value="image" className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="image-input">Upload screenshot</Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-muted/50 transition-colors">
-                    <FileImage className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm mb-2">Drag and drop your image or click to select</p>
+                  <div 
+                    onClick={handleImageClick}
+                    onDrop={handleImageDrop}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                    className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-muted/50 hover:border-primary/50 transition-all"
+                  >
+                    {imagePreview ? (
+                      <div className="space-y-4">
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          className="max-h-48 mx-auto rounded-lg"
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          {imageFile?.name}
+                        </p>
+                        <Button 
+                          type="button"
+                          variant="outline" 
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleImageClick()
+                          }}
+                        >
+                          Change Image
+                        </Button>
+                      </div>
+                    ) : (
+                      <div>
+                        <FileImage className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm mb-1 font-medium">Drag and drop your image or click to select</p>
+                        <p className="text-xs text-muted-foreground">
+                          PNG, JPG, GIF up to 10MB
+                        </p>
+                      </div>
+                    )}
                     <input
                       id="image-input"
                       type="file"
                       accept="image/*"
-                      onChange={(e) => setImageFile(e.files?.[0] || null)}
+                      onChange={(e) => handleImageSelect(e.target.files?.[0] || null)}
                       disabled={isLoading}
                       className="hidden"
                     />
-                    <label htmlFor="image-input" className="text-xs text-muted-foreground">
-                      PNG, JPG, GIF up to 10MB
-                    </label>
                   </div>
                 </div>
               </TabsContent>

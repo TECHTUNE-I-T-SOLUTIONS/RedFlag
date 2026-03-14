@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { Bell, Trash2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 
@@ -18,52 +19,47 @@ interface Notification {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter()
+  const { data: session, status } = useSession()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDeletingAll, setIsDeletingAll] = useState(false)
 
+  // Redirect if not authenticated
   useEffect(() => {
-    fetchNotifications()
-    
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel('notifications')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setNotifications((prev) => [payload.new as Notification, ...prev])
-        } else if (payload.eventType === 'DELETE') {
-          setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id))
-        }
-      })
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?callbackUrl=/dashboard/notifications')
     }
-  }, [])
+  }, [status, router])
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchNotifications()
+      // Poll for new notifications every 5 seconds
+      const interval = setInterval(fetchNotifications, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [status])
 
   const fetchNotifications = async () => {
     try {
       setIsLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
+      const response = await fetch('/api/notifications', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
-      if (!user) {
-        toast.error('Authentication required')
-        return
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/auth/login?callbackUrl=/dashboard/notifications')
+          return
+        }
+        throw new Error('Failed to fetch notifications')
       }
 
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-
+      const { notifications: data } = await response.json()
       setNotifications(data || [])
     } catch (error) {
       console.error('Error fetching notifications:', error)
@@ -75,41 +71,44 @@ export default function NotificationsPage() {
 
   const markAsRead = async (id: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ notificationId: id }),
+      })
 
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', id)
-        .eq('user_id', user.id)
-
-      if (error) throw error
+      if (!response.ok) {
+        throw new Error('Failed to update notification')
+      }
 
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       )
     } catch (error) {
+      console.error('Error marking notification as read:', error)
       toast.error('Failed to update notification')
     }
   }
 
   const deleteNotification = async (id: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const response = await fetch(`/api/notifications?id=${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id)
-
-      if (error) throw error
+      if (!response.ok) {
+        throw new Error('Failed to delete notification')
+      }
 
       setNotifications((prev) => prev.filter((n) => n.id !== id))
       toast.success('Notification deleted')
     } catch (error) {
+      console.error('Error deleting notification:', error)
       toast.error('Failed to delete notification')
     }
   }
@@ -117,20 +116,21 @@ export default function NotificationsPage() {
   const deleteAllNotifications = async () => {
     try {
       setIsDeletingAll(true)
-      const { data: { user } } = await supabase.auth.getUser()
+      const response = await fetch('/api/notifications/clear', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
-      if (!user) return
-
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('user_id', user.id)
-
-      if (error) throw error
+      if (!response.ok) {
+        throw new Error('Failed to clear notifications')
+      }
 
       setNotifications([])
       toast.success('All notifications cleared')
     } catch (error) {
+      console.error('Error clearing notifications:', error)
       toast.error('Failed to clear notifications')
     } finally {
       setIsDeletingAll(false)

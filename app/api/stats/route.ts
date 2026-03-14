@@ -1,85 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth-config'
 import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function GET(request: NextRequest) {
   try {
-    // Get auth token from Authorization header
-    const authHeader = request.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Verify NextAuth session
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    const token = authHeader.substring(7)
-    
-    // Create Supabase client to verify auth
-    const supabaseAuth = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    
-    // Get user from token
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token)
+    const userId = session.user.id
 
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // Create Supabase client with service role key to bypass RLS
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
+    console.log('Fetching stats for user:', userId)
 
     // Get total analyses count
     const { count: totalCount, error: totalError } = await supabase
       .from('analyses')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
+      .eq('is_deleted', false)
 
     // Get high risk count
     const { count: highRiskCount, error: highRiskError } = await supabase
       .from('analyses')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('risk_level', 'high')
+      .eq('is_deleted', false)
 
-    // Get average confidence
+    // Get average risk score
     const { data: confidenceData, error: confidenceError } = await supabase
       .from('analyses')
-      .select('confidence')
-      .eq('user_id', user.id)
+      .select('risk_score')
+      .eq('user_id', userId)
+      .eq('is_deleted', false)
 
-    if (totalError || highRiskError || confidenceError) {
-      console.error('Database error:', { totalError, highRiskError, confidenceError })
-      return NextResponse.json(
-        { error: 'Failed to fetch stats' },
-        { status: 500 }
-      )
-    }
-
-    const avgConfidence = confidenceData && confidenceData.length > 0
-      ? Math.round(
-        confidenceData.reduce((sum, item) => sum + item.confidence, 0) /
-        confidenceData.length
-      )
+    const avgScores = confidenceData?.map(d => d.risk_score) || []
+    const avgConfidence = avgScores.length > 0
+      ? Math.round(avgScores.reduce((a, b) => a + b, 0) / avgScores.length)
       : 0
 
     return NextResponse.json(
       {
-        totalAnalyses: totalCount || 0,
-        highRiskCount: highRiskCount || 0,
+        totalAnalyses: totalCount,
+        highRiskCount: highRiskCount,
         avgConfidence,
       },
       { status: 200 }

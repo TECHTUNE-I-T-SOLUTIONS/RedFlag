@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ArrowRight, BarChart3, AlertTriangle, TrendingUp, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { ArrowRight, BarChart3, AlertTriangle, TrendingUp, Loader2, Zap, Clock, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Analysis {
@@ -18,6 +19,8 @@ interface Analysis {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const { data: session, status } = useSession()
   const [stats, setStats] = useState({
     totalAnalyses: 0,
     highRiskCount: 0,
@@ -26,27 +29,28 @@ export default function DashboardPage() {
   const [recentAnalyses, setRecentAnalyses] = useState<Analysis[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  // Redirect to login if not authenticated
   useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?callbackUrl=/dashboard')
+    }
+  }, [status, router])
+
+  useEffect(() => {
+    if (status !== 'authenticated' || !session?.user?.id) {
+      return
+    }
+
     const loadDashboard = async () => {
       try {
         setIsLoading(true)
-        
-        // Middleware ensures session exists, just get it from Supabase
-        const { data: { session } } = await supabase.auth.getSession()
-        
-        if (!session?.access_token) {
-          console.warn('Session token not found')
-          setIsLoading(false)
-          return
-        }
 
-        console.log('Loading dashboard data...')
+        console.log('Loading dashboard data for user:', session.user?.email)
 
-        // Fetch stats
+        // Fetch stats - NextAuth session is automatically sent via cookies
         const statsResponse = await fetch('/api/stats', {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
         })
@@ -54,13 +58,15 @@ export default function DashboardPage() {
         if (statsResponse.ok) {
           const statsData = await statsResponse.json()
           setStats(statsData)
+        } else if (statsResponse.status === 401) {
+          console.warn('Unauthorized - redirecting to login')
+          router.push('/auth/login')
         }
 
         // Fetch recent analyses
         const analysesResponse = await fetch('/api/analyses?limit=5', {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
         })
@@ -68,6 +74,9 @@ export default function DashboardPage() {
         if (analysesResponse.ok) {
           const analysesData = await analysesResponse.json()
           setRecentAnalyses(analysesData.analyses || [])
+        } else if (analysesResponse.status === 401) {
+          console.warn('Unauthorized - redirecting to login')
+          router.push('/auth/login')
         }
       } catch (error) {
         console.error('Error loading dashboard:', error)
@@ -78,7 +87,7 @@ export default function DashboardPage() {
     }
 
     loadDashboard()
-  }, [])
+  }, [status, session, router])
 
   return (
     <div className="space-y-8">

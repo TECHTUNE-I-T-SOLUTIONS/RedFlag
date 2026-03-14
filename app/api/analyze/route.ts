@@ -1,36 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth-config'
 import { analyzeText, analyzeURL, analyzeImage } from '@/lib/analysis-service'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function POST(request: NextRequest) {
   try {
-    // Get auth token from Authorization header
-    const authHeader = request.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Verify NextAuth session
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    const token = authHeader.substring(7)
-    
-    // Create Supabase client with anon key to verify token
-    const supabaseAuth = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    
-    // Get user from token
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token)
-
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
+    const userId = session.user.id
     const body = await request.json()
     const { type, content, imageBase64 } = body
 
@@ -79,41 +70,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create Supabase client with service role key to bypass RLS
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
-
     // Save to database
-    const { error: saveError } = await supabase
+    const { data: savedAnalysis, error: saveError } = await supabase
       .from('analyses')
-      .insert({
-        user_id: user.id,
-        content_type: type,
-        content_preview: content?.substring(0, 200) || 'Image analysis',
-        risk_score: analysisResult.riskScore,
-        risk_level: analysisResult.riskLevel,
-        red_flags: analysisResult.redFlags,
-        explanation: analysisResult.explanation,
-        recommendation: analysisResult.recommendation,
-        confidence: analysisResult.confidence,
-      })
+      .insert([
+        {
+          user_id: userId,
+          content_type: type,
+          content_preview: content?.substring(0, 200) || 'Image analysis',
+          risk_score: analysisResult.riskScore,
+          risk_level: analysisResult.riskLevel,
+          red_flags: analysisResult.redFlags,
+          explanation: analysisResult.explanation,
+          recommendation: analysisResult.recommendation,
+          confidence: analysisResult.confidence,
+        }
+      ])
+      .select('id, content_type, content_preview, risk_score, risk_level, created_at')
 
-    if (saveError) {
-      console.error('Database error:', saveError)
+    if (saveError || !savedAnalysis?.length) {
+      console.error('Save error:', saveError)
       return NextResponse.json(
         { error: 'Failed to save analysis' },
         { status: 500 }
       )
     }
 
+    // Notification is created automatically via database trigger on INSERT
     return NextResponse.json(analysisResult, { status: 200 })
   } catch (error) {
     console.error('Analysis error:', error)
@@ -123,4 +106,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

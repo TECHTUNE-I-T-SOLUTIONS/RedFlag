@@ -56,8 +56,8 @@ export default function Home() {
 
             <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center text-sm">
               <div>
-                <div className="text-2xl sm:text-3xl font-bold text-primary">99%</div>
-                <p className="text-muted-foreground">Detection Accuracy</p>
+                <div className="text-2xl sm:text-3xl font-bold text-primary">80%+</div>
+                <p className="text-muted-foreground">Detection Rate</p>
               </div>
               <div>
                 <div className="text-2xl sm:text-3xl font-bold text-primary">&lt;2s</div>

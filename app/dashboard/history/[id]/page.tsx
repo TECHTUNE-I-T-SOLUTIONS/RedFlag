@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { RiskScoreDisplay } from '@/components/RiskScoreDisplay'
-import { supabase } from '@/lib/supabase'
 import { downloadPDF } from '@/lib/pdf-generator'
 import { toast } from 'sonner'
 import { ArrowLeft, Download, Loader2, AlertTriangle, Clock } from 'lucide-react'
@@ -26,6 +26,7 @@ interface Analysis {
 export default function HistoryDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const { data: session, status } = useSession()
   const analysisId = params.id as string
 
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
@@ -33,30 +34,37 @@ export default function HistoryDetailPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const [remainingHours, setRemainingHours] = useState<number | null>(null)
 
+  // Redirect if not authenticated
   useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?callbackUrl=/dashboard/history')
+    }
+  }, [status, router])
+
+  useEffect(() => {
+    if (status !== 'authenticated' || !session?.user?.id) {
+      return
+    }
+
     const fetchAnalysis = async () => {
       try {
         setIsLoading(true)
-        const { data: { session } } = await supabase.auth.getSession()
+        const response = await fetch(`/api/analyses/${analysisId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
 
-        if (!session?.access_token) {
-          toast.error('Authentication required')
-          router.push('/dashboard/history')
-          return
+        if (!response.ok) {
+          if (response.status === 401) {
+            router.push('/auth/login?callbackUrl=/dashboard/history')
+            return
+          }
+          throw new Error('Failed to load analysis')
         }
 
-        const { data, error } = await supabase
-          .from('analyses')
-          .select('*')
-          .eq('id', analysisId)
-          .single()
-
-        if (error) {
-          toast.error('Failed to load analysis')
-          router.push('/dashboard/history')
-          return
-        }
-
+        const { analysis: data } = await response.json()
         setAnalysis(data)
       } catch (error) {
         console.error('Error fetching analysis:', error)
@@ -68,7 +76,7 @@ export default function HistoryDetailPage() {
     }
 
     fetchAnalysis()
-  }, [analysisId, router])
+  }, [analysisId, router, status, session])
 
   // Calculate remaining time until deletion (24 hours after creation)
   useEffect(() => {
@@ -219,11 +227,17 @@ export default function HistoryDetailPage() {
       </Card>
 
       {/* Red Flags */}
-      {analysis.red_flags.length > 0 && (
+      {((Array.isArray(analysis.red_flags) && analysis.red_flags.length > 0) || 
+        (typeof analysis.red_flags === 'string' && analysis.red_flags.length > 0)) && (
         <Card className="backdrop-blur-sm bg-white/10 dark:bg-gray-900/30 border border-white/20 dark:border-gray-700/50 rounded-2xl p-6 shadow-lg">
           <h2 className="text-xl font-bold mb-4">Red Flags Identified</h2>
           <div className="space-y-3">
-            {analysis.red_flags.map((flag, idx) => (
+            {(Array.isArray(analysis.red_flags) 
+              ? analysis.red_flags 
+              : typeof analysis.red_flags === 'string' 
+                ? JSON.parse(analysis.red_flags)
+                : []
+            ).map((flag, idx) => (
               <div key={idx} className="flex gap-3 text-sm">
                 <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                 <span>{flag}</span>

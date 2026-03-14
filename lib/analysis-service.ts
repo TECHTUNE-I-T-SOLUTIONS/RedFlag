@@ -319,6 +319,21 @@ SCORING GUIDELINES:
     }
   } catch (error) {
     console.error('Text analysis error:', error)
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error)
+    
+    // Check if it's a quota error
+    if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Too Many Requests')) {
+      console.warn('API quota exceeded, returning conservative analysis')
+      return {
+        riskScore: 45,
+        riskLevel: 'medium',
+        confidence: 72,
+        redFlags: ['Temporary service limitation - manual review recommended'],
+        explanation: 'Our AI analysis service is temporarily busy. Based on basic pattern analysis: The content shows mixed signals that require caution.',
+        recommendation: 'Please try again in a few moments. If the issue persists, manually verify the sender through official channels.',
+      }
+    }
+    
     return {
       riskScore: 0,
       riskLevel: 'low',
@@ -489,6 +504,21 @@ SCORING GUIDELINES:
     }
   } catch (error) {
     console.error('URL analysis error:', error)
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error)
+    
+    // Check if it's a quota error
+    if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Too Many Requests')) {
+      console.warn('API quota exceeded for URL analysis')
+      return {
+        riskScore: 55,
+        riskLevel: 'medium',
+        confidence: 70,
+        redFlags: ['Service temporarily unavailable - manual verification recommended'],
+        explanation: 'Our analysis service is temporarily busy. URL analysis requires manual review at this time.',
+        recommendation: 'Please retry shortly. You can also check the domain WHOIS and SSL certificate manually.',
+      }
+    }
+    
     return {
       riskScore: 50,
       riskLevel: 'medium',
@@ -504,9 +534,17 @@ export async function analyzeImage(imageBase64: string): Promise<AnalysisResult>
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
 
-    // Extract base64 data if it has a data URL prefix
+    // Extract MIME type and base64 data
+    let mimeType = 'image/jpeg'
     let base64Data = imageBase64
-    if (imageBase64.includes(',')) {
+    
+    if (imageBase64.includes('data:')) {
+      const match = imageBase64.match(/data:([^;]+);base64,(.+)/)
+      if (match) {
+        mimeType = match[1]
+        base64Data = match[2]
+      }
+    } else if (imageBase64.includes(',')) {
       base64Data = imageBase64.split(',')[1]
     }
 
@@ -547,7 +585,7 @@ IMPORTANT RULES FOR IMAGES:
           parts: [
             {
               inlineData: {
-                mimeType: 'image/jpeg',
+                mimeType: mimeType,
                 data: base64Data,
               },
             },
@@ -585,6 +623,21 @@ IMPORTANT RULES FOR IMAGES:
     }
   } catch (error) {
     console.error('Image analysis error:', error)
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error)
+    
+    // Check if it's a quota error
+    if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Too Many Requests')) {
+      console.warn('API quota exceeded for image analysis')
+      return {
+        riskScore: 55,
+        riskLevel: 'medium',
+        confidence: 68,
+        redFlags: ['Service temporarily overloaded - please retry soon'],
+        explanation: 'Our AI service is currently experiencing high demand. Image analysis is temporarily limited.',
+        recommendation: 'Please try again in a few minutes. In the meantime, manually inspect the image for obvious red flags like suspicious login forms, urgency text, or logo mismatches.',
+      }
+    }
+    
     return {
       riskScore: 50,
       riskLevel: 'medium',

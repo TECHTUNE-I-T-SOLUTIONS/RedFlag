@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -44,22 +44,35 @@ export default function SignupPage() {
     setIsLoading(true)
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+      // Create user account
+      const signupResponse = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, confirmPassword }),
       })
 
-      if (error) {
-        toast.error(error.message || 'Failed to create account')
+      if (!signupResponse.ok) {
+        const errorData = await signupResponse.json()
+        toast.error(errorData.error || 'Failed to create account')
         setIsLoading(false)
         return
       }
 
-      toast.success('Account created! Check your email to confirm.')
-      router.push('/auth/login')
+      // Auto sign-in the new user
+      const signInResult = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (signInResult?.error) {
+        toast.error('Account created but failed to sign in. Please login.')
+        router.push('/auth/login')
+        return
+      }
+
+      toast.success('Account created successfully!')
+      router.push('/dashboard')
     } catch (error) {
       console.error('Signup error:', error)
       toast.error('An error occurred. Please try again.')

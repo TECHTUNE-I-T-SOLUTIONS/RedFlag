@@ -75,7 +75,7 @@ export default function AboutPage() {
           <div className="container mx-auto max-w-4xl">
             <div className="grid md:grid-cols-4 gap-6">
               {[
-                { value: '99%', label: 'Detection Accuracy' },
+                { value: '80%+', label: 'Confidence Rating' },
                 { value: '<2s', label: 'Analysis Time' },
                 { value: '24h', label: 'Data Retention' },
                 { value: '∞', label: 'Free Analyses' },
@@ -130,6 +130,60 @@ export default function AboutPage() {
                   </div>
                 </Card>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Company Background */}
+        <section className="px-4 py-16 sm:py-24 bg-muted/20">
+          <div className="container mx-auto max-w-4xl">
+            <div className="grid md:grid-cols-2 gap-12">
+              <div>
+                <h2 className="text-3xl font-bold mb-6">Our Story</h2>
+                <div className="space-y-4 text-muted-foreground">
+                  <p>
+                    RedFlag was founded by cybersecurity professionals and AI researchers who witnessed firsthand the rising tide of sophisticated scams targeting everyday people. Frustrated by the lack of accessible tools, we decided to build something better.
+                  </p>
+                  <p>
+                    What started as a passion project has grown into a mission: democratizing scam detection through cutting-edge AI technology that's free and available to everyone.
+                  </p>
+                  <p>
+                    Our team combines expertise in machine learning, cybersecurity, and product design to create intuitive tools that empower users without requiring technical knowledge.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="backdrop-blur-sm bg-white/10 dark:bg-gray-900/30 border border-white/20 dark:border-gray-700/50 rounded-2xl p-6 shadow-lg">
+                  <h3 className="font-bold text-lg mb-2 text-primary">Our Commitment</h3>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-1">•</span>
+                      <span>Completely free for all users</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-1">•</span>
+                      <span>No hidden paywalls or limitations</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-1">•</span>
+                      <span>Transparent about our capabilities and limitations</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary mt-1">•</span>
+                      <span>Regular updates and improvements</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="backdrop-blur-sm bg-white/10 dark:bg-gray-900/30 border border-white/20 dark:border-gray-700/50 rounded-2xl p-6 shadow-lg">
+                  <h3 className="font-bold text-lg mb-2 text-primary">Technology</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Our analysis engine leverages advanced machine learning models, pattern recognition, and threat intelligence databases. We achieve 80%+ confidence in detecting common scam patterns with sub-2-second analysis.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Note: Like all detection systems, RedFlag is a tool to assist users, not a guarantee. Always use your judgment and verify information through official channels.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>

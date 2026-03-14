@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { clearSession } from '@/lib/session-storage'
+import { useSession, signOut } from 'next-auth/react'
 import { DashboardHeader } from '@/components/DashboardHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { LogoutConfirmModal } from '@/components/LogoutConfirmModal'
@@ -22,39 +21,38 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const [userEmail, setUserEmail] = useState<string>('')
+  const { data: session, status } = useSession()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [logoutModalOpen, setLogoutModalOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    // Get user email - middleware ensures session exists
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user?.email) {
-        setUserEmail(user.email)
-      }
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?callbackUrl=/dashboard')
     }
-    getUser()
-  }, [])
+  }, [status, router])
 
   useEffect(() => {
     // Fetch unread notifications count
     const fetchUnreadCount = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+        if (status !== 'authenticated' || !session?.user?.id) {
+          return
+        }
 
-        const { count, error } = await supabase
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false)
+        const response = await fetch('/api/notifications/count', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
 
-        if (!error) {
-          setUnreadNotifications(count || 0)
+        if (response.ok) {
+          const { unreadCount } = await response.json()
+          setUnreadNotifications(unreadCount || 0)
         }
       } catch (error) {
         console.error('Error fetching notification count:', error)
@@ -63,22 +61,11 @@ export default function DashboardLayout({
 
     fetchUnreadCount()
 
-    // Subscribe to notifications in real-time
-    const subscription = supabase
-      .channel('notifications')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-      }, () => {
-        fetchUnreadCount()
-      })
-      .subscribe()
+    // Poll for notifications every 10 seconds
+    const interval = setInterval(fetchUnreadCount, 10000)
 
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [])
+    return () => clearInterval(interval)
+  }, [status, session])
 
   useEffect(() => {
     // Close sidebar when resizing to desktop
@@ -116,22 +103,18 @@ export default function DashboardLayout({
   const handleLogout = async () => {
     setIsLoggingOut(true)
     try {
-      await supabase.auth.signOut()
-      clearSession() // Clear localStorage session
+      await signOut({ redirect: true, callbackUrl: '/' })
       toast.success('Logged out successfully')
-      router.push('/')
     } catch (error) {
       toast.error('Failed to logout')
-    } finally {
       setIsLoggingOut(false)
-      setLogoutModalOpen(false)
     }
   }
 
   return (
     <>
       <DashboardHeader
-        userEmail={userEmail}
+        userEmail={session?.user?.email || ''}
         onLogout={() => setLogoutModalOpen(true)}
         onMenuClick={() => setIsSidebarOpen(true)}
       />

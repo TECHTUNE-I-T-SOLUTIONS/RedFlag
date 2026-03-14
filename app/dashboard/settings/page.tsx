@@ -3,25 +3,32 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation'
+import { useSession, signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Sun, Moon, Bell, LogOut, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { LogoutConfirmModal } from '@/components/LogoutConfirmModal'
 import { toast } from 'sonner'
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [notifications, setNotifications] = useState(true)
   const [mounted, setMounted] = useState(false)
-  const [userEmail, setUserEmail] = useState('')
   const [joinedDate, setJoinedDate] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutModalOpen, setLogoutModalOpen] = useState(false)
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?callbackUrl=/dashboard/settings')
+    }
+  }, [status, router])
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !mounted) {
@@ -33,27 +40,34 @@ export default function SettingsPage() {
   const fetchUserData = async () => {
     try {
       setIsLoading(true)
-      const { data: { user }, error } = await supabase.auth.getUser()
-
-      if (error) {
-        console.error('Auth error:', error)
-        toast.error('Failed to load user data')
+      
+      if (status !== 'authenticated' || !session?.user?.id) {
         return
       }
 
-      if (user) {
-        setUserEmail(user.email || 'Not available')
-        setJoinedDate(
-          new Date(user.created_at).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })
-        )
+      // Fetch user profile from API to get created_at
+      const response = await fetch('/api/user/profile', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        const { profile } = await response.json()
+        if (profile?.created_at) {
+          setJoinedDate(
+            new Date(profile.created_at).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })
+          )
+        }
       }
     } catch (error) {
       console.error('Error fetching user data:', error)
-      toast.error('Failed to load user information')
+      // Don't show error toast as it's not critical
     } finally {
       setIsLoading(false)
     }
@@ -62,14 +76,11 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true)
-      await supabase.auth.signOut()
+      await signOut({ redirect: true, callbackUrl: '/' })
       toast.success('Logged out successfully')
-      setLogoutModalOpen(false)
-      router.push('/')
     } catch (error) {
       console.error('Logout error:', error)
       toast.error('Failed to logout')
-    } finally {
       setIsLoggingOut(false)
     }
   }
@@ -148,14 +159,7 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div>
             <Label className="text-sm text-muted-foreground">Email Address</Label>
-            {isLoading ? (
-              <div className="flex items-center gap-2 mt-1">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-muted-foreground">Loading...</span>
-              </div>
-            ) : (
-              <p className="font-medium">{userEmail}</p>
-            )}
+            <p className="font-medium">{session?.user?.email || 'Loading...'}</p>
           </div>
 
           <div>

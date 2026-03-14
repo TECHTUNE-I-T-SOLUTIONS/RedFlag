@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
 /**
  * Cleanup API Route
- * Deletes analyses older than 24 hours
+ * Deletes analyses marked as deleted older than 24 hours
  * 
  * Security: This route should be called by an authorized cron job or service
- * Uses the service role key to bypass RLS and perform deletions
+ * Uses the cleanup secret key from environment for authentication
  * 
  * Usage:
- * - Can be called manually: curl https://redflag.app/api/cleanup
+ * - Can be called manually: curl https://redflagesecurity.app/api/cleanup -H "x-cleanup-secret: YOUR_SECRET"
  * - Should be set up as a cron job to run every hour or daily
  */
 
@@ -40,41 +45,32 @@ export async function GET(request: NextRequest) {
       console.log('Cleanup request authenticated with secret key')
     }
 
-    // Create Supabase client with service role key
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
-
     // Calculate timestamp for 24 hours ago
     const twentyFourHoursAgo = new Date()
     twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24)
     const cutoffTime = twentyFourHoursAgo.toISOString()
 
-    console.log(`Cleanup started: Looking for analyses created before ${cutoffTime}`)
+    console.log(`Cleanup started: Looking for old analyses created before ${cutoffTime}`)
 
-    // Query for analyses older than 24 hours
-    const { data: oldAnalyses, error: fetchError } = await supabase
+    // Query for analyses marked as deleted older than 24 hours
+    const { data: oldAnalyses, error: selectError } = await supabase
       .from('analyses')
       .select('id')
+      .eq('is_deleted', true)
       .lt('created_at', cutoffTime)
 
-    if (fetchError) {
-      console.error('Error fetching old analyses:', fetchError)
+    if (selectError) {
+      console.error('Query error:', selectError)
       return NextResponse.json(
-        { error: 'Failed to fetch old analyses', details: fetchError.message },
+        { error: 'Failed to query analyses', details: selectError.message },
         { status: 500 }
       )
     }
 
-    if (!oldAnalyses || oldAnalyses.length === 0) {
-      console.log('No analyses older than 24 hours found')
+    const oldAnalysisIds = oldAnalyses?.map((row: any) => row.id) || []
+
+    if (oldAnalysisIds.length === 0) {
+      console.log('No old deleted analyses found')
       return NextResponse.json({
         success: true,
         message: 'No analyses older than 24 hours found',
@@ -82,39 +78,36 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    console.log(`Found ${oldAnalyses.length} analyses to delete`)
-
-    // Extract IDs
-    const analysisIds = oldAnalyses.map((analysis) => analysis.id)
+    console.log(`Found ${oldAnalysisIds.length} analyses to permanently delete`)
 
     // Delete notifications associated with these analyses
-    const { error: notifDeleteError, count: notifCount } = await supabase
+    const { error: notifError } = await supabase
       .from('notifications')
       .delete()
-      .in('analysis_id', analysisIds)
+      .in('analysis_id', oldAnalysisIds)
 
-    if (notifDeleteError) {
-      console.error('Error deleting notifications:', notifDeleteError)
-      // Continue anyway, as the main data is more important
+    if (notifError) {
+      console.warn('Error deleting notifications:', notifError)
     } else {
-      console.log(`Deleted ${notifCount || 0} notifications`)
+      console.log(`Deleted notifications for analyses`)
     }
 
-    // Delete the analyses themselves (using service role key to bypass RLS)
-    const { error: deleteError, count } = await supabase
+    // Permanently delete the analyses
+    const { error: deleteError } = await supabase
       .from('analyses')
       .delete()
+      .eq('is_deleted', true)
       .lt('created_at', cutoffTime)
 
     if (deleteError) {
-      console.error('Error deleting analyses:', deleteError)
+      console.error('Delete error:', deleteError)
       return NextResponse.json(
-        { error: 'Failed to delete old analyses', details: deleteError.message },
+        { error: 'Failed to delete analyses', details: deleteError.message },
         { status: 500 }
       )
     }
 
-    const deletedCount = count || 0
+    const deletedCount = oldAnalysisIds.length
     console.log(`✅ Cleanup successful: Deleted ${deletedCount} analyses`)
 
     return NextResponse.json({

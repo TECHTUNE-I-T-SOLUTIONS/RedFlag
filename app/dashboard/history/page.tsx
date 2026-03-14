@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -14,7 +15,6 @@ import {
 } from '@/components/ui/select'
 import { Archive, AlertTriangle, Trash2, Loader2 } from 'lucide-react'
 import { getRiskColor } from '@/lib/utils'
-import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 interface Analysis {
@@ -28,27 +28,30 @@ interface Analysis {
 
 export default function HistoryPage() {
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [searchQuery, setSearchQuery] = useState('')
   const [riskFilter, setRiskFilter] = useState('all')
   const [analyses, setAnalyses] = useState<Analysis[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [total, setTotal] = useState(0)
 
+  // Redirect if not authenticated
   useEffect(() => {
-    fetchAnalyses()
-  }, [riskFilter])
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?callbackUrl=/dashboard/history')
+    }
+  }, [status, router])
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchAnalyses()
+    }
+  }, [riskFilter, status])
 
   const fetchAnalyses = async () => {
     try {
       setIsLoading(true)
       
-      // Get the session to get auth token
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.access_token) {
-        throw new Error('No auth token available')
-      }
-
       const params = new URLSearchParams()
       if (riskFilter !== 'all') {
         params.append('riskLevel', riskFilter)
@@ -58,12 +61,15 @@ export default function HistoryPage() {
       const response = await fetch(`/api/analyses?${params.toString()}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
       })
       
       if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/auth/login?callbackUrl=/dashboard/history')
+          return
+        }
         throw new Error('Failed to fetch analyses')
       }
 

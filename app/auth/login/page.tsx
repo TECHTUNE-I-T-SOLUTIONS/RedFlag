@@ -1,10 +1,11 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,12 +14,16 @@ import { Footer } from '@/components/Footer'
 import { toast } from 'sonner'
 import { Eye, EyeOff } from 'lucide-react'
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  const error = searchParams.get('error')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,46 +32,27 @@ export default function LoginPage() {
     try {
       console.log('Starting login for:', email)
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const result = await signIn('credentials', {
         email,
         password,
+        redirect: false,
       })
 
-      if (error) {
-        console.error('Login error:', error.message)
-        toast.error(error.message || 'Failed to login')
+      if (result?.error) {
+        console.error('Login error:', result.error)
+        toast.error(result.error || 'Failed to login')
         setIsLoading(false)
         return
       }
 
-      if (data?.session?.user) {
-        console.log('✅ Login successful for user:', data.session.user.email)
-        
-        // Create session object for localStorage
-        const sessionData = {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at,
-          user: data.session.user,
-        }
-        
-        // Save to localStorage before redirecting
-        try {
-          localStorage.setItem('supabase-auth-token', JSON.stringify(sessionData))
-          console.log('Session saved to localStorage')
-        } catch (e) {
-          console.error('Failed to save session to localStorage:', e)
-        }
-        
+      if (result?.ok) {
+        console.log('✅ Login successful')
         toast.success('Logged in successfully!')
         
-        // Small delay to ensure localStorage is written
-        setTimeout(() => {
-          console.log('Redirecting to dashboard...')
-          router.push('/dashboard')
-        }, 500)
+        // Redirect to callback URL or dashboard
+        router.push(callbackUrl)
       } else {
-        toast.error('Login failed: No session returned')
+        toast.error('Login failed. Please try again.')
         setIsLoading(false)
       }
     } catch (error) {
@@ -95,6 +81,14 @@ export default function LoginPage() {
             <p className="text-muted-foreground">Sign in to your account to continue</p>
           </div>
 
+          {error && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {error === 'CredentialsSignin' ? 'Invalid email or password' : error}
+              </p>
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -112,12 +106,6 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link
-                  href="/auth/reset-password"
-                  className="text-xs text-primary hover:underline"
-                >
-                  Forgot password?
-                </Link>
               </div>
               <div className="relative">
                 <Input
@@ -164,5 +152,17 @@ export default function LoginPage() {
       </main>
       <Footer />
     </>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }
